@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTitle } from "@/lib/imdb";
 import { resolveAllStreamSources } from "@/lib/providers";
+import { getPublicOrigin } from "@/lib/site-origin";
 import type { StreamType } from "@/lib/stream";
 
 export const dynamic = "force-dynamic";
-
-function siteBase(req: NextRequest): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin;
-}
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -34,7 +32,7 @@ export async function GET(req: NextRequest) {
     title = details?.title;
   }
 
-  const sources = await resolveAllStreamSources({ ...streamReq, title }, siteBase(req));
+  const sources = await resolveAllStreamSources({ ...streamReq, title }, getPublicOrigin(req));
 
   if (!sources.length) {
     return NextResponse.json(

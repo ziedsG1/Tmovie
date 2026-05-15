@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
+import { toAbsoluteMediaUrl } from "@/lib/absolute-url";
 
 const VideoPlayer = dynamic(
   () => import("./VideoPlayer").then((m) => m.VideoPlayer),
@@ -72,9 +73,12 @@ export function MultiSourcePlayer({
         return;
       }
 
-      const list: StreamSourceOption[] = (data.sources || []).filter(
-        (s: StreamSourceOption) => s.type === "hls"
-      );
+      const list: StreamSourceOption[] = (data.sources || [])
+        .filter((s: StreamSourceOption) => s.type === "hls")
+        .map((s: StreamSourceOption) => ({
+          ...s,
+          url: toAbsoluteMediaUrl(s.url),
+        }));
       setSources(list);
 
       if (list[0]) setActiveId(list[0].label + list[0].url);

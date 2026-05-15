@@ -11,7 +11,7 @@ export function canOfferStream(ctx: ProviderContext): boolean {
 
 export async function resolveAllStreamSources(
   ctx: ProviderContext,
-  siteBase: string
+  siteBase = ""
 ): Promise<StreamSourceOption[]> {
   if (!canOfferStream(ctx)) return [];
 
@@ -24,17 +24,19 @@ export async function resolveAllStreamSources(
 
   const hlsSources = await fetchAllHlsSources(req);
   const sources: StreamSourceOption[] = [];
+  const base = siteBase.replace(/\/$/, "");
 
   for (const s of hlsSources) {
     const variant = s.variants[0];
     if (!variant) continue;
     const enc = encodeProxyPayload(variant.url, s.referer);
     const id = s.label.toLowerCase().includes("vidsrc") ? "vidsrc" : "playimdb";
+    const path = `/api/hls/${enc}.m3u8`;
     sources.push({
       id,
       label: s.label,
       type: "hls",
-      url: `${siteBase}/api/hls/${enc}.m3u8`,
+      url: base ? `${base}${path}` : path,
       quality: variant.quality,
     });
   }
