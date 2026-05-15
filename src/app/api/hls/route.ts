@@ -14,22 +14,13 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { encoded: string } }
-) {
-  const encoded = params.encoded.replace(/\.m3u8$/i, "");
+/** Short URL fallback when encoded path would exceed platform limits. */
+export async function GET(req: NextRequest) {
+  const p = req.nextUrl.searchParams.get("p");
+  if (!p) return new NextResponse("Bad request", { status: 400, headers: CORS });
   try {
-    return await proxyManifestRequest(req, encoded);
+    return await proxyManifestRequest(req, p);
   } catch {
     return new NextResponse("Proxy error", { status: 502, headers: CORS });
   }
-}
-
-export async function HEAD(
-  req: NextRequest,
-  ctx: { params: { encoded: string } }
-) {
-  const res = await GET(req, ctx);
-  return new NextResponse(null, { status: res.status, headers: res.headers });
 }

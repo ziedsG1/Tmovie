@@ -245,6 +245,22 @@ function parseMasterPlaylist(body: string, masterUrl: string): StreamVariant[] {
   return variants.sort((a, b) => b.bandwidth - a.bandwidth).map(({ url, quality }) => ({ url, quality }));
 }
 
+function mediaSegmentLines(body: string): string[] {
+  return body
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+}
+
+/** Reject obfuscated playlists that point at HTML pages instead of video segments. */
+export function isPlayableHlsBody(body: string): boolean {
+  if (!body.trimStart().startsWith("#EXTM3U")) return false;
+  const segs = mediaSegmentLines(body);
+  if (segs.length === 0) return true;
+  const junk = segs.filter((l) => /\.(html?|php|shtml)(\?|#|$)/i.test(l));
+  return junk.length < Math.max(1, segs.length * 0.25);
+}
+
 async function resolveStream(m3u8Url: string, ref: string): Promise<{ url: string; verified: boolean; body?: string } | null> {
   const headerSets: Record<string, string>[] = [
     { "User-Agent": UA, Referer: ref, Origin: "https://brightpathsignals.com" },
@@ -313,17 +329,29 @@ export async function checkStreamAvailable(
   return checkVidsrcAvailable(req);
 }
 
-async function variantsFromHit(hit: StreamHit): Promise<StreamVariant[] | null> {
-  const results = await Promise.all(hit.urls.map((u) => resolveStream(u, hit.referer)));
-  const best = results.find((r) => r?.verified) || results.find((r) => r);
-  if (!best) return hit.urls[0] ? [{ url: hit.urls[0], quality: "Auto" }] : null;
+/** Resolve a master or media m3u8 to a playable media playlist URL. */
+async function resolvePlayableStreamUrl(m3u8Url: string, ref: string): Promise<string | null> {
+  const resolved = await resolveStream(m3u8Url, ref);
+  if (!resolved?.body || !isPlayableHlsBody(resolved.body)) return null;
 
-  if (!best.verified || !best.body) {
-    return [{ url: best.url, quality: "Auto" }];
+  const masterVariants = parseMasterPlaylist(resolved.body, m3u8Url);
+  if (masterVariants.length > 0) {
+    for (const variant of masterVariants) {
+      const media = await resolvePlayableStreamUrl(variant.url, ref);
+      if (media) return media;
+    }
+    return null;
   }
 
-  const variants = parseMasterPlaylist(best.body, best.url);
-  return variants.length > 0 ? [variants[0]] : [{ url: best.url, quality: "Auto" }];
+  return m3u8Url;
+}
+
+async function variantsFromHit(hit: StreamHit): Promise<StreamVariant[] | null> {
+  for (const url of hit.urls) {
+    const playable = await resolvePlayableStreamUrl(url, hit.referer);
+    if (playable) return [{ url: playable, quality: "Auto" }];
+  }
+  return null;
 }
 
 /** All distinct HLS options (multiple vaplayer referers). No iframes. */
